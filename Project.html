@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>LogiTech | Gestão de Estoque</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #fff;
+    }
+
+    header {
+      background: linear-gradient(90deg, #0ea5e9, #22c55e);
+      padding: 20px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .container {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    }
+
+    input, select, button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+    }
+
+    input, select {
+      background: #334155;
+      color: white;
+    }
+
+    button {
+      background: #22c55e;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #16a34a;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #334155;
+      text-align: center;
+    }
+
+    .low {
+      color: #ef4444;
+      font-weight: bold;
+    }
+
+    .actions button {
+      margin: 2px;
+      padding: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>🚚 LogiTech - Sistema de Estoque</header>
+
+<div class="container">
+
+  <!-- FORM -->
+  <div class="card">
+    <h2>Adicionar Produto</h2>
+
+    <input id="nome" placeholder="Nome">
+    <input id="categoria" placeholder="Categoria">
+    <input id="quantidade" type="number" placeholder="Quantidade">
+    <input id="preco" type="number" placeholder="Preço">
+
+    <button onclick="handleAdicionar()">Cadastrar</button>
+
+    <hr>
+
+    <button onclick="carregarProdutos()">Atualizar Lista</button>
+    <button onclick="verEstoqueBaixo()">Estoque Baixo</button>
+    <button onclick="mostrarPatrimonio()">Patrimônio</button>
+  </div>
+
+  <!-- TABELA -->
+  <div class="card">
+    <h2>📦 Inventário</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Categoria</th>
+          <th>Qtd</th>
+          <th>Preço</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tabela"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'SUA_SUPABASE_URL_AQUI';
+const SUPABASE_KEY = 'SUA_SUPABASE_KEY_AQUI';
+
+const URL = `${SUPABASE_URL}/rest/v1/produtos`;
+
+const HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation'
+};
+
+// =================== CRUD ===================
+
+async function adicionarProduto(nome, categoria, quantidade, preco) {
+  if (preco <= 0) return alert("Preço inválido!");
+
+  await fetch(URL, {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify([{ nome, categoria, quantidade, preco }])
+  });
+
+  carregarProdutos();
+}
+
+async function listarProdutos() {
+  const res = await fetch(`${URL}?select=*`, { headers: HEADERS });
+  return res.json();
+}
+
+async function atualizarQuantidade(id, qtd) {
+  await fetch(`${URL}?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: HEADERS,
+    body: JSON.stringify({ quantidade: qtd })
+  });
+
+  carregarProdutos();
+}
+
+async function deletarProduto(id) {
+  await fetch(`${URL}?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: HEADERS
+  });
+
+  carregarProdutos();
+}
+
+// =================== UI ===================
+
+async function carregarProdutos() {
+  const produtos = await listarProdutos();
+  const tabela = document.getElementById("tabela");
+
+  tabela.innerHTML = "";
+
+  produtos.forEach(p => {
+    tabela.innerHTML += `
+      <tr>
+        <td>${p.id}</td>
+        <td>${p.nome}</td>
+        <td>${p.categoria}</td>
+        <td class="${p.quantidade < 5 ? 'low' : ''}">
+          ${p.quantidade}
+        </td>
+        <td>R$ ${p.preco}</td>
+        <td class="actions">
+          <button onclick="vender(${p.id}, ${p.quantidade})">Vender</button>
+          <button onclick="deletarProduto(${p.id})">Excluir</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+// =================== FUNÇÕES ===================
+
+function handleAdicionar() {
+  const nome = document.getElementById("nome").value;
+  const categoria = document.getElementById("categoria").value;
+  const quantidade = parseInt(document.getElementById("quantidade").value);
+  const preco = parseFloat(document.getElementById("preco").value);
+
+  adicionarProduto(nome, categoria, quantidade, preco);
+}
+
+function vender(id, qtd) {
+  if (qtd <= 0) return alert("Sem estoque!");
+  atualizarQuantidade(id, qtd - 1);
+}
+
+async function verEstoqueBaixo() {
+  const res = await fetch(`${URL}?quantidade=lt.5&select=*`, { headers: HEADERS });
+  const data = await res.json();
+  console.table(data);
+  alert("Veja o console (F12)");
+}
+
+async function mostrarPatrimonio() {
+  const produtos = await listarProdutos();
+  const total = produtos.reduce((s, p) => s + p.quantidade * p.preco, 0);
+  alert("Patrimônio: R$ " + total.toFixed(2));
+}
+
+// INIT
+carregarProdutos();
+
+</script>
+
+</body>
+</html>
